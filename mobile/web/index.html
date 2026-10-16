@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    If you are serving your web app in a path other than the root, change the
+    href value below to reflect the base path you are serving from.
+
+    The path provided below has to start and end with a slash "/" in order for
+    it to work correctly.
+
+    For more details:
+    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
+
+    This is a placeholder for base href that will be replaced by the value of
+    the `--base-href` argument provided to `flutter build`.
+  -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Klik - aplikasi kencan online">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Klik">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Klik — Temukan yang klik</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: linear-gradient(#fffbfd, #ffeef4);
+      font-family: system-ui, sans-serif;
+    }
+    .boot {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #e8336f;
+      gap: 14px;
+    }
+    .boot-mark {
+      width: 72px;
+      height: 72px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #ff85b3, #ff4f8b);
+      box-shadow: 0 16px 40px rgba(255, 79, 139, 0.28);
+    }
+    .boot-title { font-weight: 800; letter-spacing: -0.4px; font-size: 28px; }
+  </style>
+</head>
+<body>
+  <div class="boot">
+    <div class="boot-mark"></div>
+    <div class="boot-title">klik</div>
+  </div>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>
