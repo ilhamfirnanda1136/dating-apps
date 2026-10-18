@@ -29,6 +29,7 @@
     "jsonwebtoken": "^9.0.3",
     "mysql2": "^3.24.6",
     "sequelize": "^6.37.8",
+    "ws": "^8.22.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -36,6 +37,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^26.6.5",
+    "@types/ws": "^8.18.2",
     "sequelize-cli": "^6.6.5",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2"

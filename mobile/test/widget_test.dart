@@ -8,8 +8,20 @@ import 'package:flutter_test/flutter_test.dart';
 
 class _FakeDatingApi extends DatingApi {
   @override
-  Future<ChatMessage> sendMessage(String matchId, String content) async {
-    return ChatMessage(id: 'msg-1', text: content, isMe: true, sentAt: DateTime(2026, 10, 16, 20));
+  Future<ChatMessage> sendMessage(
+    String matchId,
+    String content, {
+    String? mediaUrl,
+    String? replyToId,
+  }) async {
+    return ChatMessage(
+      id: 'msg-1',
+      text: content,
+      isMe: true,
+      sentAt: DateTime(2026, 10, 16, 20),
+      mediaUrl: mediaUrl,
+      replyToId: replyToId,
+    );
   }
 
   @override

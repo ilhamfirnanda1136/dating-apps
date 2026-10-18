@@ -14,6 +14,7 @@ export class Message extends Model<InferAttributes<Message>, InferCreationAttrib
   declare id: CreationOptional<string>;
   declare match_id: ForeignKey<Match['id']>;
   declare sender_id: ForeignKey<User['id']>;
+  declare reply_to_id: CreationOptional<string | null>;
   declare content: CreationOptional<string | null>;
   declare media_url: CreationOptional<string | null>;
   declare is_read: CreationOptional<boolean>;
@@ -25,6 +26,7 @@ Message.init(
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
     match_id: { type: DataTypes.UUID, allowNull: false },
     sender_id: { type: DataTypes.UUID, allowNull: false },
+    reply_to_id: { type: DataTypes.UUID, allowNull: true },
     content: { type: DataTypes.TEXT, allowNull: true },
     media_url: { type: DataTypes.TEXT, allowNull: true },
     is_read: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },

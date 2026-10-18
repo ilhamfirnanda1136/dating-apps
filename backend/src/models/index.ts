@@ -41,6 +41,7 @@ Match.hasMany(Call, { foreignKey: 'match_id', as: 'calls' });
 
 Message.belongsTo(Match, { foreignKey: 'match_id', as: 'match' });
 Message.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
+Message.belongsTo(Message, { foreignKey: 'reply_to_id', as: 'replyTo' });
 
 Call.belongsTo(Match, { foreignKey: 'match_id', as: 'match' });
 Call.belongsTo(User, { foreignKey: 'caller_id', as: 'caller' });

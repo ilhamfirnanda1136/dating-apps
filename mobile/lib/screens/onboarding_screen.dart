@@ -27,13 +27,13 @@ class OnboardingScreen extends StatelessWidget {
                 const BrandLogo(),
                 const Expanded(child: _HeroArt()),
                 Text(
-                  'Temukan seseorang yang benar-benar klik',
+                  'Temukan cinta yang kamu impikan',
                   textAlign: TextAlign.center,
                   style: text.headlineMedium?.copyWith(fontWeight: FontWeight.w800, height: 1.2),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Swipe, match, lalu ngobrol dengan orang nyata dari komunitas Klik.',
+                  'Swipe, match, lalu ngobrol dengan orang nyata dari komunitas FindLove.',
                   textAlign: TextAlign.center,
                   style: text.bodyMedium?.copyWith(color: AppColors.inkSoft, height: 1.5),
                 ),

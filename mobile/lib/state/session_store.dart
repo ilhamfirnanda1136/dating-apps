@@ -22,6 +22,8 @@ class SessionStore extends ChangeNotifier {
   final DatingApi _datingApi;
   final TokenStorage _storage;
 
+  TokenStorage get storage => _storage;
+
   /// Null artinya belum login / sesi hangus.
   Account? account;
 

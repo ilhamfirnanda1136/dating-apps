@@ -187,7 +187,7 @@ class _DiscoverScreenState extends State<DiscoverScreen> {
                   icon: Icons.bolt_rounded,
                   iconColor: AppColors.gold,
                   onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Boost tersedia untuk pengguna Klik Plus ✨')),
+                    const SnackBar(content: Text('Boost tersedia untuk pengguna FindLove Plus ✨')),
                   ),
                 ),
               ],

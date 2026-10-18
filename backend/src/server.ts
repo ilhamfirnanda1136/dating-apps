@@ -1,6 +1,7 @@
 import { app } from './app';
 import { env } from './config/env';
 import { sequelize } from './models';
+import { initWebSocketServer } from './websocket/socket.server';
 
 async function main() {
   await sequelize.authenticate();
@@ -9,6 +10,8 @@ async function main() {
   const server = app.listen(env.PORT, () => {
     console.log(`Server berjalan di http://localhost:${env.PORT}`);
   });
+
+  initWebSocketServer(server);
 
   const shutdown = (signal: string) => {
     console.log(`${signal} diterima, mematikan server...`);

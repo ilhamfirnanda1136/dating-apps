@@ -66,7 +66,7 @@ class _PremiumSheetState extends State<_PremiumSheet> {
               child: const Icon(Icons.workspace_premium_rounded, color: Colors.white, size: 32),
             ),
             const SizedBox(height: 14),
-            Text('Klik Plus', style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+            Text('FindLove Plus', style: text.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
             const SizedBox(height: 6),
             Text(
               'Like tanpa batas, lihat siapa yang menyukaimu, dan Super Like setiap hari.',

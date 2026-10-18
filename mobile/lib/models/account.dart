@@ -47,6 +47,7 @@ class Account {
     required this.profile,
     this.phone,
     this.preference,
+    this.isPro = false,
   });
 
   final String id;
@@ -56,6 +57,7 @@ class Account {
   final String status;
   final UserProfile profile;
   final AccountPreference? preference;
+  final bool isPro;
 
   /// Backend mengirim nested JSON. Kita ratakan jadi [UserProfile] yang dipakai UI.
   factory Account.fromJson(Map<String, dynamic> json) {
@@ -73,6 +75,7 @@ class Account {
       phone: json['phone'] as String?,
       role: json['role'] as String? ?? 'user',
       status: json['status'] as String? ?? 'active',
+      isPro: json['is_pro'] == true,
       preference: AccountPreference.fromJson(json['preference'] as Map<String, dynamic>?),
       profile: UserProfile(
         id: json['id'] as String,

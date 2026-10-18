@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../models/account.dart';
 import '../models/chat.dart';
 import '../models/user_profile.dart';
@@ -93,8 +94,38 @@ class DatingApi {
         .toList();
   }
 
-  Future<ChatMessage> sendMessage(String matchId, String content) async {
-    final body = await _client.post('/matches/$matchId/messages', body: {'content': content});
+  Future<String> uploadImage({
+    required List<int> bytes,
+    required String filename,
+    String mimeType = 'image/jpeg',
+  }) async {
+    final base64Data = base64Encode(bytes);
+    final dataUri = 'data:$mimeType;base64,$base64Data';
+    final body = await _client.post('/upload', body: {
+      'image': dataUri,
+      'filename': filename,
+    });
+    final data = body['data'];
+    if (data is Map && data['url'] is String) {
+      return data['url'] as String;
+    }
+    throw const ApiException('Gagal mengupload gambar');
+  }
+
+  Future<ChatMessage> sendMessage(
+    String matchId,
+    String content, {
+    String? mediaUrl,
+    String? replyToId,
+  }) async {
+    final payload = <String, dynamic>{'content': content};
+    if (mediaUrl != null && mediaUrl.isNotEmpty) {
+      payload['media_url'] = mediaUrl;
+    }
+    if (replyToId != null && replyToId.isNotEmpty) {
+      payload['reply_to_id'] = replyToId;
+    }
+    final body = await _client.post('/matches/$matchId/messages', body: payload);
     final data = body['data'];
     if (data is! Map) {
       throw const ApiException('Respons kirim pesan tidak valid');

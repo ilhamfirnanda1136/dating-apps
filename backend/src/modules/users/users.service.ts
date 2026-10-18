@@ -1,7 +1,7 @@
-import type { Includeable } from 'sequelize';
+import { Op, type Includeable } from 'sequelize';
 import { AppError } from '../../common/errors';
 import { calculateAge } from '../../common/utils/age';
-import { Photo, Preference, Profile, User } from '../../models';
+import { Photo, Preference, Profile, Subscription, User } from '../../models';
 import type { AddPhotoInput, UpdateLocationInput, UpdatePreferencesInput, UpdateProfileInput } from './users.schema';
 
 const ME_INCLUDE: Includeable[] = [
@@ -13,7 +13,26 @@ const ME_INCLUDE: Includeable[] = [
 export async function getMe(userId: string) {
   const user = await User.findByPk(userId, { include: ME_INCLUDE });
   if (!user) throw AppError.notFound('Akun tidak ditemukan');
-  return user;
+
+  const subscription = await Subscription.findOne({
+    where: {
+      user_id: userId,
+      status: 'active',
+      [Op.or]: [
+        { end_at: null },
+        { end_at: { [Op.gt]: new Date() } },
+      ],
+    },
+    include: [{ association: 'plan' }],
+    order: [['created_at', 'DESC']],
+  });
+
+  const userData = user.toJSON();
+  return {
+    ...userData,
+    is_pro: Boolean(subscription),
+    subscription: subscription ? subscription.toJSON() : null,
+  };
 }
 
 export async function updateProfile(userId: string, input: UpdateProfileInput) {

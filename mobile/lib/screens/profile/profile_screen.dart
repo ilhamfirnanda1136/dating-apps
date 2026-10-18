@@ -57,7 +57,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final me = SessionScope.of(context).profile;
+    final session = SessionScope.of(context);
+    final isPro = session.account?.isPro ?? false;
+    final me = session.profile;
     final chats = ChatScope.of(context);
     final matchCount = chats.conversations.length + chats.newMatches.length;
     final text = Theme.of(context).textTheme;
@@ -159,6 +161,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(width: 6),
                 const Icon(Icons.verified_rounded, color: Color(0xFF5AB8FF), size: 22),
               ],
+              if (isPro) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    gradient: AppColors.premiumGradient,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Text(
+                    'PRO',
+                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 4),
@@ -240,7 +256,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 22),
-          const PremiumCard(),
+          PremiumCard(isPro: isPro),
           const SizedBox(height: 22),
           _SettingsGroup(
             children: [
@@ -271,7 +287,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               _SettingsTile(
                 icon: Icons.workspace_premium_rounded,
-                label: 'Klik Plus',
+                label: 'FindLove Plus',
                 onTap: () => showPremiumSheet(context),
               ),
               _SettingsTile(

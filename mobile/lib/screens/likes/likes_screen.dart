@@ -2,10 +2,16 @@ import 'package:flutter/material.dart';
 
 import '../../api/dating_api.dart';
 import '../../models/user_profile.dart';
+import '../../state/chat_store.dart';
+import '../../state/session_store.dart';
 import '../../theme/app_colors.dart';
+import '../../utils/api_feedback.dart';
 import '../../widgets/empty_state.dart';
 import '../../widgets/net_image.dart';
 import '../../widgets/pressable.dart';
+import '../chat/chat_room_screen.dart';
+import '../discover/match_dialog.dart';
+import '../discover/swipe_deck.dart';
 import '../profile/premium_card.dart';
 import '../profile/profile_detail_screen.dart';
 
@@ -55,6 +61,56 @@ class _LikesScreenState extends State<LikesScreen> {
     }
   }
 
+  Future<void> _swipeLike(UserProfile profile, String action) async {
+    setState(() {
+      _likedYou = _likedYou.where((u) => u.id != profile.id).toList();
+      _topPicks = _topPicks.where((u) => u.id != profile.id).toList();
+    });
+
+    try {
+      final result = await _api.swipe(targetId: profile.id, action: action);
+      if (!mounted) return;
+
+      if (result.matched && result.matchId != null) {
+        final store = ChatScope.read(context);
+        store.addMatch(profile, matchId: result.matchId!);
+
+        final sendMessage = await showMatchDialog(
+          context,
+          me: SessionScope.read(context).profile,
+          other: profile,
+        );
+        if (!mounted) return;
+
+        if (sendMessage == true) {
+          final conversation = store.openWith(profile);
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => ChatRoomScreen(conversation: conversation)),
+          );
+        }
+      }
+    } catch (error) {
+      if (!mounted) return;
+      _load();
+      showApiError(context, error);
+    }
+  }
+
+  Future<void> _openDetail(UserProfile profile) async {
+    final direction = await Navigator.of(context).push<SwipeDirection>(
+      MaterialPageRoute(
+        builder: (_) => ProfileDetailScreen(profile: profile, showActions: true),
+      ),
+    );
+    if (!mounted || direction == null) return;
+    final action = switch (direction) {
+      SwipeDirection.left => 'pass',
+      SwipeDirection.up => 'super_like',
+      SwipeDirection.right => 'like',
+    };
+    await _swipeLike(profile, action);
+  }
+
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
@@ -90,7 +146,7 @@ class _LikesScreenState extends State<LikesScreen> {
                     ),
                     if (_tab == 0) ...[
                       const SizedBox(height: 18),
-                      const PremiumCard(compact: true),
+                      PremiumCard(compact: true, isPro: SessionScope.of(context).account?.isPro ?? false),
                     ],
                     const SizedBox(height: 18),
                   ],
@@ -140,11 +196,9 @@ class _LikesScreenState extends State<LikesScreen> {
                   itemBuilder: (context, i) => _LikeCard(
                     profile: items[i],
                     featured: _tab == 1,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ProfileDetailScreen(profile: items[i], showActions: false),
-                      ),
-                    ),
+                    onTap: () => _openDetail(items[i]),
+                    onLike: () => _swipeLike(items[i], 'like'),
+                    onPass: () => _swipeLike(items[i], 'pass'),
                   ),
                 ),
               ),
@@ -219,11 +273,19 @@ class _Segmented extends StatelessWidget {
 }
 
 class _LikeCard extends StatelessWidget {
-  const _LikeCard({required this.profile, required this.featured, required this.onTap});
+  const _LikeCard({
+    required this.profile,
+    required this.featured,
+    required this.onTap,
+    this.onLike,
+    this.onPass,
+  });
 
   final UserProfile profile;
   final bool featured;
   final VoidCallback onTap;
+  final VoidCallback? onLike;
+  final VoidCallback? onPass;
 
   @override
   Widget build(BuildContext context) {
@@ -246,30 +308,79 @@ class _LikeCard extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    stops: [0.5, 1],
-                    colors: [Colors.transparent, Color(0xB3000000)],
+                    stops: [0.4, 1],
+                    colors: [Colors.transparent, Color(0xCC000000)],
                   ),
                 ),
               ),
               Positioned(
-                left: 14,
-                right: 14,
-                bottom: 14,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                left: 12,
+                right: 12,
+                bottom: 12,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      '${profile.name}, ${profile.age}',
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 17),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '${profile.name}, ${profile.age}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            profile.distanceKm > 0
+                                ? '${profile.distanceKm} km dari kamu'
+                                : (profile.city.isEmpty ? 'Lokasi belum diisi' : profile.city),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: Colors.white70, fontSize: 11),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      profile.distanceKm > 0 ? '${profile.distanceKm} km dari kamu' : (profile.city.isEmpty ? 'Lokasi belum diisi' : profile.city),
-                      style: const TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
+                    if (onLike != null) ...[
+                      const SizedBox(width: 8),
+                      Pressable(
+                        onTap: onLike!,
+                        scale: 0.86,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: AppColors.primaryGradient,
+                            boxShadow: AppColors.softShadow(0.4),
+                          ),
+                          child: const Icon(Icons.favorite_rounded, color: Colors.white, size: 22),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
+              if (onPass != null)
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: Pressable(
+                    onTap: onPass!,
+                    scale: 0.86,
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.black.withValues(alpha: 0.35),
+                      ),
+                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
+                    ),
+                  ),
+                ),
               if (featured)
                 Positioned(
                   top: 10,

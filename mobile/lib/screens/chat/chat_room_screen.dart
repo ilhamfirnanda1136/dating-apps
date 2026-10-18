@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../models/chat.dart';
 import '../../state/chat_store.dart';
@@ -7,6 +9,7 @@ import '../../utils/api_feedback.dart';
 import '../../utils/time_format.dart';
 import '../../widgets/avatar.dart';
 import '../../widgets/circle_icon_button.dart';
+import '../../widgets/net_image.dart';
 import '../../widgets/pressable.dart';
 import '../profile/profile_detail_screen.dart';
 import 'typing_indicator.dart';
@@ -36,6 +39,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   bool _loadingMessages = true;
   bool _sending = false;
 
+  // Fitur Reply
+  ChatMessage? _replyingTo;
+
+  // Fitur Upload Image
+  Uint8List? _attachedBytes;
+  String? _uploadedUrl;
+  bool _uploadingImage = false;
+
   @override
   void initState() {
     super.initState();
@@ -51,29 +62,265 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         if (mounted) setState(() => _loadingMessages = false);
       }
     });
-    _input.addListener(() => setState(() {}));
+    _input.addListener(() {
+      setState(() {});
+      _store.sendTyping(widget.conversation.id, _input.text.trim().isNotEmpty);
+    });
   }
 
   @override
   void dispose() {
+    _store.sendTyping(widget.conversation.id, false);
     _store.setActive(null);
     _input.dispose();
     _focus.dispose();
     super.dispose();
   }
 
-  /// [preset] diisi icebreaker; kalau null, ambil teks dari composer.
-  /// Jangan clear input sebelum API sukses, supaya gagal jaringan tidak kehilangan teks.
-  Future<void> _send([String? preset]) async {
-    if (_loadingMessages || _sending) return;
-    final value = preset ?? _input.text;
-    if (value.trim().isEmpty) return;
-    setState(() => _sending = true);
-    if (preset == null) _input.clear();
+  Future<void> _pickImage(ImageSource source) async {
     try {
-      await _store.send(widget.conversation, value);
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: source,
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+      if (picked == null) return;
+
+      final bytes = await picked.readAsBytes();
+      setState(() {
+        _attachedBytes = bytes;
+        _uploadingImage = true;
+      });
+
+      final url = await _store.uploadImage(
+        bytes: bytes,
+        filename: picked.name,
+        mimeType: picked.mimeType ?? 'image/jpeg',
+      );
+      if (mounted) {
+        setState(() {
+          _uploadedUrl = url;
+          _uploadingImage = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _attachedBytes = null;
+          _uploadedUrl = null;
+          _uploadingImage = false;
+        });
+        showApiError(context, e);
+      }
+    }
+  }
+
+  void _showAttachOptions() {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: AppColors.line,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primarySoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
+                ),
+                title: const Text('Galeri Foto', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: const Text('Pilih foto dari galeri perangkat'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickImage(ImageSource.gallery);
+                },
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(
+                    color: AppColors.blushDeep,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: AppColors.primaryDeep),
+                ),
+                title: const Text('Kamera', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: const Text('Ambil foto langsung dengan kamera'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _pickImage(ImageSource.camera);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _cancelReply() {
+    setState(() => _replyingTo = null);
+  }
+
+  void _clearAttachment() {
+    setState(() {
+      _attachedBytes = null;
+      _uploadedUrl = null;
+      _uploadingImage = false;
+    });
+  }
+
+  void _showMessageOptions(ChatMessage message) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.line,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primarySoft,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.reply_rounded, color: AppColors.primary),
+                ),
+                title: const Text('Balas Pesan', style: TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text(
+                  message.text.isNotEmpty
+                      ? message.text
+                      : (message.mediaUrl != null ? '[Foto]' : ''),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  setState(() => _replyingTo = message);
+                  _focus.requestFocus();
+                },
+              ),
+              if (message.text.trim().isNotEmpty) ...[
+                const SizedBox(height: 6),
+                ListTile(
+                  leading: Container(
+                    width: 42,
+                    height: 42,
+                    decoration: const BoxDecoration(
+                      color: AppColors.blush,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.copy_rounded, color: AppColors.ink),
+                  ),
+                  title: const Text('Salin Teks', style: TextStyle(fontWeight: FontWeight.w700)),
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: message.text));
+                    Navigator.of(ctx).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Pesan disalin ke clipboard')),
+                    );
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showFullscreenImage(BuildContext context, String imageUrl) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black.withValues(alpha: 0.9),
+        barrierDismissible: true,
+        pageBuilder: (ctx, anim1, anim2) => Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: IconButton(
+              icon: const Icon(Icons.close_rounded, color: Colors.white, size: 28),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ),
+          body: Center(
+            child: InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 3.5,
+              child: NetImage(imageUrl, fit: BoxFit.contain),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// [preset] diisi icebreaker; kalau null, ambil teks dari composer.
+  Future<void> _send([String? preset]) async {
+    if (_loadingMessages || _sending || _uploadingImage) return;
+    final value = preset ?? _input.text;
+    final hasText = value.trim().isNotEmpty;
+    final hasImage = _uploadedUrl != null && _uploadedUrl!.isNotEmpty;
+    if (!hasText && !hasImage) return;
+
+    setState(() => _sending = true);
+    final textToSend = value;
+    final mediaToSend = _uploadedUrl;
+    final replyIdToSend = _replyingTo?.id;
+
+    if (preset == null) _input.clear();
+    _clearAttachment();
+    _cancelReply();
+
+    try {
+      await _store.send(
+        widget.conversation,
+        textToSend,
+        mediaUrl: mediaToSend,
+        replyToId: replyIdToSend,
+      );
     } catch (error) {
-      if (preset == null) _input.text = value;
+      if (preset == null) _input.text = textToSend;
       if (mounted) showApiError(context, error);
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -124,7 +371,17 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       final m = messages[index];
                       final newer = index > 0 ? messages[index - 1] : null;
                       final isLastInGroup = newer == null || newer.isMe != m.isMe;
-                      return _Bubble(message: m, showTail: isLastInGroup);
+                      return _Bubble(
+                        message: m,
+                        showTail: isLastInGroup,
+                        conversation: c,
+                        onReply: () {
+                          setState(() => _replyingTo = m);
+                          _focus.requestFocus();
+                        },
+                        onLongPress: () => _showMessageOptions(m),
+                        onImageTap: (url) => _showFullscreenImage(context, url),
+                      );
                     },
                   ),
           ),
@@ -133,7 +390,14 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             focusNode: _focus,
             enabled: !_loadingMessages && !_sending,
             onSend: _send,
-            onAttach: () => _comingSoon('Kirim foto'),
+            onAttach: _showAttachOptions,
+            replyingTo: _replyingTo,
+            partnerName: c.user.name,
+            onCancelReply: _cancelReply,
+            attachedBytes: _attachedBytes,
+            uploadingImage: _uploadingImage,
+            onClearAttachment: _clearAttachment,
+            hasUploadedImage: _uploadedUrl != null,
           ),
         ],
       ),
@@ -249,15 +513,26 @@ class _DayChip extends StatelessWidget {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.message, required this.showTail});
+  const _Bubble({
+    required this.message,
+    required this.showTail,
+    required this.conversation,
+    required this.onReply,
+    required this.onLongPress,
+    required this.onImageTap,
+  });
 
   final ChatMessage message;
   final bool showTail;
+  final Conversation conversation;
+  final VoidCallback onReply;
+  final VoidCallback onLongPress;
+  final ValueChanged<String> onImageTap;
 
   @override
   Widget build(BuildContext context) {
     final isMe = message.isMe;
-    final maxWidth = MediaQuery.sizeOf(context).width * 0.74;
+    final maxWidth = MediaQuery.sizeOf(context).width * 0.76;
     const r = Radius.circular(22);
     const tail = Radius.circular(6);
 
@@ -267,6 +542,10 @@ class _Bubble extends StatelessWidget {
       bottomLeft: !isMe && showTail ? tail : r,
       bottomRight: isMe && showTail ? tail : r,
     );
+
+    final reply = message.replyTo;
+    final hasMedia = message.mediaUrl != null && message.mediaUrl!.isNotEmpty;
+    final hasText = message.text.trim().isNotEmpty;
 
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
@@ -278,54 +557,193 @@ class _Bubble extends StatelessWidget {
       ),
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          constraints: BoxConstraints(maxWidth: maxWidth),
-          margin: EdgeInsets.only(top: 3, bottom: showTail ? 10 : 3),
-          padding: const EdgeInsets.fromLTRB(16, 11, 12, 8),
-          decoration: BoxDecoration(
-            gradient: isMe ? AppColors.primaryGradient : null,
-            color: isMe ? null : Colors.white,
-            borderRadius: radius,
-            boxShadow: isMe ? AppColors.softShadow(0.22) : AppColors.softShadow(0.06),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                widthFactor: 1,
-                child: Text(
-                  message.text,
-                  style: TextStyle(
-                    color: isMe ? Colors.white : AppColors.ink,
-                    fontSize: 15,
-                    height: 1.4,
+        child: GestureDetector(
+          onLongPress: onLongPress,
+          onDoubleTap: onReply,
+          child: Container(
+            constraints: BoxConstraints(maxWidth: maxWidth),
+            margin: EdgeInsets.only(top: 3, bottom: showTail ? 10 : 3),
+            padding: EdgeInsets.fromLTRB(
+              hasMedia && !hasText && reply == null ? 4 : 12,
+              hasMedia && !hasText && reply == null ? 4 : 10,
+              hasMedia && !hasText && reply == null ? 4 : 12,
+              8,
+            ),
+            decoration: BoxDecoration(
+              gradient: isMe ? AppColors.primaryGradient : null,
+              color: isMe ? null : Colors.white,
+              borderRadius: radius,
+              boxShadow: isMe ? AppColors.softShadow(0.22) : AppColors.softShadow(0.06),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Kuotasi Pesan yang dibalas (Reply Quote Box)
+                if (reply != null) ...[
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isMe
+                          ? Colors.black.withValues(alpha: 0.15)
+                          : AppColors.blush.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border(
+                        left: BorderSide(
+                          color: isMe ? Colors.white : AppColors.primary,
+                          width: 3.5,
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          reply.senderId != null && !isMe
+                              ? 'Pesan Dibalas'
+                              : 'Membalas',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: isMe ? Colors.white : AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (reply.mediaUrl != null) ...[
+                              Icon(
+                                Icons.image_rounded,
+                                size: 14,
+                                color: isMe
+                                    ? Colors.white.withValues(alpha: 0.85)
+                                    : AppColors.inkSoft,
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                            Flexible(
+                              child: Text(
+                                reply.content.isNotEmpty
+                                    ? reply.content
+                                    : (reply.mediaUrl != null ? 'Foto' : ''),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isMe
+                                      ? Colors.white.withValues(alpha: 0.9)
+                                      : AppColors.inkSoft,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Gambar Lampiran Chat
+                if (hasMedia) ...[
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: GestureDetector(
+                      onTap: () => onImageTap(message.mediaUrl!),
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(
+                            constraints: const BoxConstraints(
+                              maxHeight: 260,
+                              minHeight: 140,
+                              minWidth: 160,
+                            ),
+                            width: double.infinity,
+                            color: Colors.black12,
+                            child: NetImage(
+                              message.mediaUrl!,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 8,
+                            right: 8,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.4),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.fullscreen_rounded,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (hasText) const SizedBox(height: 6),
+                ],
+
+                // Teks Pesan
+                if (hasText) ...[
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: 1,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: hasMedia ? 4 : 2,
+                        vertical: hasMedia ? 2 : 0,
+                      ),
+                      child: Text(
+                        message.text,
+                        style: TextStyle(
+                          color: isMe ? Colors.white : AppColors.ink,
+                          fontSize: 15,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 4),
+
+                // Jam & Indikator Centang
+                Padding(
+                  padding: const EdgeInsets.only(right: 2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        formatClock(message.sentAt),
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isMe
+                              ? Colors.white.withValues(alpha: 0.8)
+                              : AppColors.inkSoft,
+                        ),
+                      ),
+                      if (isMe) ...[
+                        const SizedBox(width: 4),
+                        Icon(
+                          message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
+                          size: 15,
+                          color: Colors.white.withValues(alpha: message.isRead ? 1 : 0.75),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    formatClock(message.sentAt),
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isMe ? Colors.white.withValues(alpha: 0.8) : AppColors.inkSoft,
-                    ),
-                  ),
-                  if (isMe) ...[
-                    const SizedBox(width: 4),
-                    Icon(
-                      message.isRead ? Icons.done_all_rounded : Icons.done_rounded,
-                      size: 15,
-                      color: Colors.white.withValues(alpha: message.isRead ? 1 : 0.75),
-                    ),
-                  ],
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -390,6 +808,13 @@ class _Composer extends StatelessWidget {
     required this.onSend,
     required this.onAttach,
     this.enabled = true,
+    this.replyingTo,
+    required this.partnerName,
+    required this.onCancelReply,
+    this.attachedBytes,
+    this.uploadingImage = false,
+    required this.onClearAttachment,
+    this.hasUploadedImage = false,
   });
 
   final TextEditingController controller;
@@ -397,6 +822,15 @@ class _Composer extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final bool enabled;
+
+  final ChatMessage? replyingTo;
+  final String partnerName;
+  final VoidCallback onCancelReply;
+
+  final Uint8List? attachedBytes;
+  final bool uploadingImage;
+  final VoidCallback onClearAttachment;
+  final bool hasUploadedImage;
 
   static const _emojis = ['😊', '😂', '😍', '🥰', '🙈', '👍', '🔥', '❤️'];
 
@@ -445,82 +879,212 @@ class _Composer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final canSend = enabled && controller.text.trim().isNotEmpty;
+    final hasText = controller.text.trim().isNotEmpty;
+    final canSend = enabled && !uploadingImage && (hasText || hasUploadedImage);
 
     return SafeArea(
       top: false,
       minimum: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: AppColors.softShadow(0.1),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    IconButton(
-                      tooltip: 'Emoji',
-                      onPressed: () => _showEmojiPicker(context),
-                      icon: const Icon(Icons.emoji_emotions_outlined, color: AppColors.inkSoft),
-                    ),
-                    Expanded(
-                      child: TextField(
-                        controller: controller,
-                        focusNode: focusNode,
-                        enabled: enabled,
-                        minLines: 1,
-                        maxLines: 4,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: enabled ? (_) => onSend() : null,
-                        decoration: const InputDecoration(
-                          hintText: 'Tulis pesan...',
-                          filled: false,
-                          contentPadding: EdgeInsets.symmetric(vertical: 16),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      onPressed: onAttach,
-                      icon: const Icon(Icons.image_outlined, color: AppColors.inkSoft),
-                    ),
-                  ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Banner Reply Preview jika sedang membalas pesan
+          if (replyingTo != null) ...[
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+              padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: AppColors.softShadow(0.08),
+                border: const Border(
+                  left: BorderSide(color: AppColors.primary, width: 4),
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Pressable(
-              onTap: canSend ? onSend : null,
-              scale: 0.85,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: canSend ? AppColors.primaryGradient : null,
-                  color: canSend ? null : AppColors.primarySoft,
-                  boxShadow: canSend ? AppColors.softShadow(0.4) : null,
-                ),
-                child: AnimatedRotation(
-                  turns: canSend ? 0 : -0.1,
-                  duration: const Duration(milliseconds: 200),
-                  child: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
-                ),
+              child: Row(
+                children: [
+                  const Icon(Icons.reply_rounded, color: AppColors.primary, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Membalas ${replyingTo!.isMe ? 'diri Anda' : partnerName}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          replyingTo!.text.isNotEmpty
+                              ? replyingTo!.text
+                              : (replyingTo!.mediaUrl != null ? '[Foto]' : ''),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, color: AppColors.inkSoft),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.inkSoft),
+                    onPressed: onCancelReply,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
+                ],
               ),
             ),
           ],
-        ),
+
+          // Banner Image Attachment Preview jika ada foto yang dipilih/diunggah
+          if (attachedBytes != null) ...[
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: AppColors.softShadow(0.08),
+              ),
+              child: Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Image.memory(
+                          attachedBytes!,
+                          width: 54,
+                          height: 54,
+                          fit: BoxFit.cover,
+                        ),
+                        if (uploadingImage)
+                          Container(
+                            width: 54,
+                            height: 54,
+                            color: Colors.black45,
+                            child: const Center(
+                              child: SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          uploadingImage ? 'Mengunggah foto...' : 'Foto terlampir',
+                          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          uploadingImage ? 'Mohon tunggu sebentar' : 'Siap dikirim',
+                          style: const TextStyle(fontSize: 11, color: AppColors.inkSoft),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.inkSoft),
+                    onPressed: onClearAttachment,
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Input Bar Utama
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: AppColors.softShadow(0.1),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        IconButton(
+                          tooltip: 'Emoji',
+                          onPressed: () => _showEmojiPicker(context),
+                          icon: const Icon(Icons.emoji_emotions_outlined, color: AppColors.inkSoft),
+                        ),
+                        Expanded(
+                          child: TextField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            enabled: enabled,
+                            minLines: 1,
+                            maxLines: 4,
+                            textInputAction: TextInputAction.send,
+                            onSubmitted: canSend ? (_) => onSend() : null,
+                            decoration: const InputDecoration(
+                              hintText: 'Tulis pesan...',
+                              filled: false,
+                              contentPadding: EdgeInsets.symmetric(vertical: 16),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Kirim Foto',
+                          onPressed: enabled ? onAttach : null,
+                          icon: const Icon(Icons.add_photo_alternate_outlined, color: AppColors.primary),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Pressable(
+                  onTap: canSend ? onSend : null,
+                  scale: 0.85,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: canSend ? AppColors.primaryGradient : null,
+                      color: canSend ? null : AppColors.primarySoft,
+                      boxShadow: canSend ? AppColors.softShadow(0.4) : null,
+                    ),
+                    child: AnimatedRotation(
+                      turns: canSend ? 0 : -0.1,
+                      duration: const Duration(milliseconds: 200),
+                      child: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

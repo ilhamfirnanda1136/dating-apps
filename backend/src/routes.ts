@@ -6,6 +6,7 @@ import { discoverRouter } from './modules/discover/discover.routes';
 import { likesRouter, swipesRouter } from './modules/swipes/swipes.routes';
 import { matchesRouter } from './modules/matches/matches.routes';
 import { notificationsRouter } from './modules/notifications/notifications.routes';
+import { uploadRouter } from './modules/upload/upload.routes';
 
 export const apiRouter = Router();
 
@@ -17,3 +18,4 @@ apiRouter.use('/likes', likesRouter);
 apiRouter.use('/matches', matchesRouter);
 apiRouter.use('/notifications', notificationsRouter);
 apiRouter.use('/admin', adminRouter);
+apiRouter.use('/upload', uploadRouter);

@@ -81,12 +81,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'klik',
+                    'findlove',
                     style: GoogleFonts.pacifico(fontSize: 42, color: AppColors.primaryDeep, height: 1),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Temukan yang benar-benar klik',
+                    'Temukan cinta sejatimu',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: AppColors.inkSoft),
                   ),
                 ],

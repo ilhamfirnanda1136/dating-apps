@@ -1,9 +1,24 @@
 import { Op } from 'sequelize';
 import { AppError } from '../../common/errors';
-import { Match, Notification, Profile, Swipe, User } from '../../models';
+import { Match, Notification, Profile, Subscription, Swipe, User } from '../../models';
 import { toPublicProfile } from '../common/public-profile';
+import { notifyNewMatch } from '../../websocket/socket.server';
 
 const LIKE_ACTIONS = ['like', 'super_like'] as const;
+
+export async function isUserPro(userId: string): Promise<boolean> {
+  const sub = await Subscription.findOne({
+    where: {
+      user_id: userId,
+      status: 'active',
+      [Op.or]: [
+        { end_at: null },
+        { end_at: { [Op.gt]: new Date() } },
+      ],
+    },
+  });
+  return Boolean(sub);
+}
 
 export async function createSwipe(swiperId: string, targetId: string, action: 'like' | 'pass' | 'super_like') {
   if (swiperId === targetId) throw AppError.badRequest('Tidak bisa swipe diri sendiri');
@@ -25,9 +40,30 @@ export async function createSwipe(swiperId: string, targetId: string, action: 'l
 
   let match = null;
   if (action !== 'pass') {
-    const reverse = await Swipe.findOne({
+    let reverse = await Swipe.findOne({
       where: { swiper_id: targetId, target_id: swiperId, action: { [Op.in]: [...LIKE_ACTIONS] } },
     });
+
+    const isPro = await isUserPro(swiperId);
+    if (!reverse && isPro) {
+      const existingTargetSwipe = await Swipe.findOne({
+        where: { swiper_id: targetId, target_id: swiperId },
+      });
+      if (existingTargetSwipe) {
+        existingTargetSwipe.action = 'like';
+        await existingTargetSwipe.save();
+      } else {
+        await Swipe.create({
+          swiper_id: targetId,
+          target_id: swiperId,
+          action: 'like',
+        });
+      }
+      reverse = await Swipe.findOne({
+        where: { swiper_id: targetId, target_id: swiperId, action: { [Op.in]: [...LIKE_ACTIONS] } },
+      });
+    }
+
     if (reverse) {
       match = await ensureMatch(swiperId, targetId);
     }
@@ -76,6 +112,10 @@ async function ensureMatch(userId1: string, userId2: string) {
       data: { match_id: created.id, user_id: userId1 },
     },
   ]);
+
+  notifyNewMatch(created.id, userId1, userId2).catch((err) => {
+    console.error('[WebSocket] Gagal mengirim broadcast match baru:', err);
+  });
 
   return created;
 }

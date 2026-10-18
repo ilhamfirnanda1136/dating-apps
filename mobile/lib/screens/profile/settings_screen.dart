@@ -78,10 +78,10 @@ class SettingsScreen extends StatelessWidget {
               const SizedBox(height: 16),
               group([
                 tile(Icons.help_outline_rounded, 'Bantuan'),
-                tile(Icons.info_outline_rounded, 'Tentang Klik', onTap: () {
+                tile(Icons.info_outline_rounded, 'Tentang FindLove', onTap: () {
                   showAboutDialog(
                     context: context,
-                    applicationName: 'Klik',
+                    applicationName: 'FindLove',
                     applicationVersion: '1.0.0',
                     applicationLegalese: 'Aplikasi kencan online — UI preview.',
                   );

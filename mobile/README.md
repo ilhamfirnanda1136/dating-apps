@@ -1,4 +1,4 @@
-# Flutter — Klik
+# Flutter — FindLove
 
 Aplikasi kencan Material 3 (putih–pink) untuk Android, iOS, dan **Chrome**. Dokumentasi lengkap ada di [README akar repo](../README.md).
 

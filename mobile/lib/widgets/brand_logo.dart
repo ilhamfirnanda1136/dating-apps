@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_colors.dart';
 
-/// Logo "klik": ikon hati + teks ber-gradient via [ShaderMask].
+/// Logo "findlove": ikon hati + teks ber-gradient via [ShaderMask].
 class BrandLogo extends StatelessWidget {
   const BrandLogo({super.key, this.size = 28});
 
@@ -27,7 +27,7 @@ class BrandLogo extends StatelessWidget {
         ShaderMask(
           shaderCallback: (rect) => AppColors.primaryGradient.createShader(rect),
           child: Text(
-            'klik',
+            'findlove',
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   fontSize: size,
                   fontWeight: FontWeight.w800,

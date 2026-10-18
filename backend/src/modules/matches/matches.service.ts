@@ -2,6 +2,7 @@ import { Op, type Includeable } from 'sequelize';
 import { AppError } from '../../common/errors';
 import { Match, Message, Notification, User } from '../../models';
 import { toPublicProfile } from '../common/public-profile';
+import { notifyNewMessage, sendToUser } from '../../websocket/socket.server';
 
 const USER_INCLUDE: Includeable[] = [
   { association: 'profile' },
@@ -77,41 +78,102 @@ export async function listMessages(viewerId: string, matchId: string, before?: s
     where,
     order: [['sent_at', 'DESC']],
     limit: Math.min(Math.max(limit, 1), 100),
+    include: [
+      {
+        association: 'replyTo',
+        attributes: ['id', 'content', 'media_url', 'sender_id'],
+      },
+    ],
   });
 
-  return rows.reverse().map((message) => ({
-    id: message.id,
-    content: message.content,
-    media_url: message.media_url,
-    is_me: message.sender_id === viewerId,
-    is_read: message.is_read,
-    sent_at: message.sent_at,
-  }));
+  return rows.reverse().map((message) => {
+    const reply = (message as any).replyTo;
+    return {
+      id: message.id,
+      content: message.content,
+      media_url: message.media_url,
+      reply_to_id: message.reply_to_id,
+      reply_to: reply
+        ? {
+            id: reply.id,
+            content: reply.content,
+            media_url: reply.media_url,
+            is_me: reply.sender_id === viewerId,
+          }
+        : null,
+      is_me: message.sender_id === viewerId,
+      is_read: message.is_read,
+      sent_at: message.sent_at,
+    };
+  });
 }
 
-export async function sendMessage(viewerId: string, matchId: string, content: string) {
+export async function sendMessage(
+  viewerId: string,
+  matchId: string,
+  content: string,
+  mediaUrl?: string | null,
+  replyToId?: string | null,
+) {
   const match = await loadMatchForUser(matchId, viewerId);
   const trimmed = content.trim();
-  if (!trimmed) throw AppError.badRequest('Pesan tidak boleh kosong');
+  const trimmedMedia = mediaUrl?.trim() || null;
+  if (!trimmed && !trimmedMedia) throw AppError.badRequest('Pesan tidak boleh kosong');
+
+  let validReplyTo: Message | null = null;
+  if (replyToId) {
+    validReplyTo = await Message.findOne({
+      where: { id: replyToId, match_id: match.id },
+    });
+  }
 
   const message = await Message.create({
     match_id: match.id,
     sender_id: viewerId,
-    content: trimmed,
+    content: trimmed || null,
+    media_url: trimmedMedia,
+    reply_to_id: validReplyTo ? validReplyTo.id : null,
   });
+
+  const replyInfo = validReplyTo
+    ? {
+        id: validReplyTo.id,
+        content: validReplyTo.content,
+        media_url: validReplyTo.media_url,
+        is_me: validReplyTo.sender_id === viewerId,
+      }
+    : null;
 
   const otherId = match.user_a_id === viewerId ? match.user_b_id : match.user_a_id;
   await Notification.create({
     user_id: otherId,
     type: 'message',
     title: 'Pesan baru',
-    body: trimmed.slice(0, 140),
+    body: (trimmed || (trimmedMedia ? '📷 Foto' : '')).slice(0, 140),
     data: { match_id: match.id, sender_id: viewerId },
   });
+
+  notifyNewMessage(
+    match.id,
+    viewerId,
+    {
+      id: message.id,
+      content: message.content,
+      media_url: message.media_url,
+      reply_to_id: message.reply_to_id,
+      reply_to: replyInfo,
+      is_read: message.is_read,
+      sent_at: message.sent_at,
+    },
+    otherId,
+  );
 
   return {
     id: message.id,
     content: message.content,
+    media_url: message.media_url,
+    reply_to_id: message.reply_to_id,
+    reply_to: replyInfo,
     is_me: true,
     is_read: false,
     sent_at: message.sent_at,
@@ -124,4 +186,13 @@ export async function markRead(viewerId: string, matchId: string) {
     { is_read: true },
     { where: { match_id: match.id, sender_id: { [Op.ne]: viewerId }, is_read: false } },
   );
+
+  const otherId = match.user_a_id === viewerId ? match.user_b_id : match.user_a_id;
+  sendToUser(otherId, {
+    type: 'messages_read',
+    data: {
+      match_id: match.id,
+      reader_id: viewerId,
+    },
+  });
 }

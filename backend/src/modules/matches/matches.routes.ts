@@ -4,9 +4,16 @@ import { authenticate } from '../../common/middlewares/authenticate';
 import { validateBody } from '../../common/middlewares/validate';
 import * as matchesService from './matches.service';
 
-const messageSchema = z.object({
-  content: z.string().trim().min(1).max(2000),
-});
+const messageSchema = z
+  .object({
+    content: z.string().trim().max(2000).optional().default(''),
+    media_url: z.string().trim().optional().nullable(),
+    reply_to_id: z.string().uuid().optional().nullable(),
+  })
+  .refine(
+    (data) => (data.content && data.content.length > 0) || (data.media_url && data.media_url.length > 0),
+    { message: 'Pesan atau foto harus diisi' },
+  );
 
 export const matchesRouter = Router();
 matchesRouter.use(authenticate);
@@ -35,7 +42,13 @@ matchesRouter.get('/:id/messages', async (req: Request, res: Response) => {
 
 matchesRouter.post('/:id/messages', validateBody(messageSchema), async (req: Request, res: Response) => {
   const body = req.body as z.infer<typeof messageSchema>;
-  const data = await matchesService.sendMessage(req.user!.id, String(req.params.id), body.content);
+  const data = await matchesService.sendMessage(
+    req.user!.id,
+    String(req.params.id),
+    body.content,
+    body.media_url,
+    body.reply_to_id,
+  );
   res.status(201).json({ data });
 });
 

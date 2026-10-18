@@ -14,7 +14,7 @@ import {
 const MIN_AGE = 18;
 const BCRYPT_ROUNDS = 10;
 
-async function buildTokens(user: User, client: ClientInfo) {
+async function buildTokens(user: Pick<User, 'id' | 'role'>, client: ClientInfo) {
   const accessToken = signAccessToken({ sub: user.id, role: user.role });
   const refresh = await issueRefreshToken(user.id, client);
   return {
